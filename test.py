@@ -8,9 +8,9 @@ from learn import extract_features
 
 def main():
 
-    #place to change model
-    clf = RandomForestClassifier(n_estimators=100)
-    #end
+
+    clf = RandomForestClassifier(n_estimators=450)
+
 
     pygame.init()
 

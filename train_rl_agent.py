@@ -28,8 +28,7 @@ Quick start
 3. (Optional) Run evaluation episodes and periodic checkpoints without
    generating PNG renders::
 
-       python train_rl_agent.py --level 1 --total-timesteps 500000 \
-           --eval-frequency 10000 --eval-episodes 10 --checkpoint-frequency 50000
+       python train_rl_agent.py --level 0 --total-timesteps 3000000 --eval-frequency 10000 --eval-episodes 10 --checkpoint-frequency 50000
 
    Evaluation always runs headlessly to avoid the expensive PNG rendering that
    :class:`env.AliensEnv` performs when ``render=True``.
