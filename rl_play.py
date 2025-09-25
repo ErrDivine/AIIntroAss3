@@ -123,6 +123,10 @@ def main() -> None:
             )
         else:
             print(f"Attempt {attempts} ended without a win: '{message}'")
+            try:
+                os.rmdir(env.log_folder)
+            except Exception as e:
+                print(f"Could not remove '{e}'")
 
     print(f"Collected {wins} winning games in {attempts} attempts.")
 
