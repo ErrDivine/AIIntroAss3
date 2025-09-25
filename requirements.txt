@@ -2,3 +2,5 @@ imageio
 pillow
 pygame
 scikit-learn
+gymnasium
+stable-baselines3
