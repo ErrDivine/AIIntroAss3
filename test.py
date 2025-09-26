@@ -25,7 +25,8 @@ def main():
     model_path = pg.get_level_model(level=level)
     with open(model_path, 'rb') as f:
         clf = pickle.load(f)
-
+    clf.verbose = 0
+    clf.n_jobs = 1
     print("模型加载完成")
 
     observation = env.reset()

@@ -109,7 +109,9 @@ def main():
 
     #Alternate models here
     clf = RandomForestClassifier(
-        n_estimators=300,  # more trees benefits from parallelism
+        n_estimators=360,
+        n_jobs=-1,
+        verbose=2
     )
     clf.fit(X, y)
     #Alternation end
