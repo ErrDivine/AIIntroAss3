@@ -4,3 +4,6 @@ pygame
 scikit-learn
 gymnasium
 stable-baselines3
+pandas
+matplotlib
+seaborn
