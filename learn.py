@@ -4,9 +4,12 @@ import time
 import datetime
 import numpy as np
 from joblib import Parallel, delayed
+
+from tqdm import tqdm
 from sklearn.ensemble import RandomForestClassifier
 # from threadpoolctl import threadpool_limits  # OPTIONAL (see note)
-import plugins
+import plugins as pg
+
 
 from play import AliensEnvPygame
 
@@ -87,7 +90,8 @@ def main():
         # 'game_records_lvl0_2024-xx-xx_xx-xx-xx', # 修改路径为你的数据
         # 'game_records_lvl0_2024-yy-yy_yy-yy-yy',
     ]
-    data_list = plugins.get_level_logs(level)
+    data_list = pg.get_level_logs(level)[:150]
+
     # data = []
     # for data_load in data_list:
     #     with open(os.path.join('logs', data_load, 'data.pkl'), 'rb') as f:
@@ -99,10 +103,15 @@ def main():
 
     X = []
     y = []
-    for observation, action in data:
+    for observation, action in tqdm(data,desc="loading game records into np arrays"):
         features = extract_features(observation)
         X.append(features)
         y.append(action)
+
+
+    X, y = pg.remove_duplicate_states(X, y)
+
+    print(f"Remaining game samples: {len(X)}")
 
     X = np.array(X)
     y = np.array(y)
@@ -110,6 +119,9 @@ def main():
     #Alternate models here
     clf = RandomForestClassifier(
         n_estimators=300,  # more trees benefits from parallelism
+        n_jobs=-1,
+        verbose=2
+
     )
     clf.fit(X, y)
     #Alternation end

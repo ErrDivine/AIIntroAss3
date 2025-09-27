@@ -15,16 +15,21 @@ def main():
     pygame.init()
 
     #set level,if you want level all model, please specifically set the parameter in the pg function to be 'all'
+
     level = 0
+
 
     env = AliensEnvPygame(level=level, render=False)
 
     # 加载模型
     model_path = 'logs\game_records_lvl0_2024-xx-xx_xx-xx-xx\gameplay_model.pkl' # 替换为你的模型的路径
     #use plugins
-    model_path = pg.get_level_model(level=level)
+
+    model_path = pg.get_level_model(level=0)
     with open(model_path, 'rb') as f:
         clf = pickle.load(f)
+    clf.verbose = 0
+    clf.n_jobs = 1
 
     print("模型加载完成")
 
@@ -54,7 +59,9 @@ def main():
 
         observation, reward, game_over, info = env.step(action)
         total_score += reward
-        print(f"Step: {step}, Action taken: {action}, Reward: {reward}, Done: {game_over}, Info: {info}")
+
+        print(f"Step: {step}, Action taken: {action}, Reward: {reward}, Done: {game_over}, Info: {info}, Total Score: {total_score}")
+
         step += 1
 
         grid_image = env.do_render()

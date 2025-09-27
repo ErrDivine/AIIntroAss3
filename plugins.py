@@ -2,6 +2,12 @@ from pathlib import Path
 import shutil
 import pickle
 from typing import Any, Iterable, Tuple
+
+from tqdm import tqdm
+from collections import defaultdict
+
+import numpy as np
+
 def get_level_logs(level=0):
     #create folder path
     logs = Path('logs')
@@ -131,6 +137,85 @@ class pkl_outcome():
 def check_outcome(path):
     checker = pkl_outcome()
     return checker.outcome_from_pkl(path)
+
+
+
+def remove_duplicate_states(X, y, max_diff_bits=1):
+    """Remove duplicate or near-duplicate feature vectors.
+
+    Parameters
+    ----------
+    X : list[np.ndarray]
+        Feature vectors extracted from observations.
+    y : list
+        Corresponding action labels for each feature vector.
+    max_diff_bits : int, optional
+        Maximum number of differing feature positions for two states to be
+        considered similar.  The default of 1 keeps the similarity check
+        strict so that only almost-identical states are filtered.
+
+    Returns
+    -------
+    tuple[list[np.ndarray], list]
+        Filtered lists without duplicate states.
+    """
+
+    filtered_X = []
+    filtered_y = []
+    # Group candidate states by the number of active features; states that are
+    # within ``max_diff_bits`` distance must have similar activation counts, so
+    # this dramatically cuts down the comparisons that need to be made.
+    buckets = defaultdict(list)
+    removed_duplicates = 0
+    removed_similar = 0
+    conflicting_labels = 0
+
+    for features, action in tqdm(zip(X, y),desc="Removing duplicate states",total=len(X)):
+        features = np.asarray(features)
+        ones_count = int(np.count_nonzero(features))
+
+        similar_index = None
+        is_exact_match = False
+        lower = max(0, ones_count - max_diff_bits)
+        upper = ones_count + max_diff_bits
+
+        for count_key in range(lower, upper + 1):
+            for candidate_idx in buckets.get(count_key, ()):
+                candidate = filtered_X[candidate_idx]
+                if candidate.shape != features.shape:
+                    continue
+                diff = int(np.count_nonzero(candidate != features))
+                if diff <= max_diff_bits:
+                    similar_index = candidate_idx
+                    is_exact_match = diff == 0
+                    break
+            if similar_index is not None:
+                break
+
+        if similar_index is not None:
+            removed_duplicates += 1
+            if not is_exact_match:
+                removed_similar += 1
+            if filtered_y[similar_index] != action:
+                conflicting_labels += 1
+            continue
+
+        buckets[ones_count].append(len(filtered_X))
+        filtered_X.append(features)
+        filtered_y.append(action)
+
+    if removed_duplicates:
+        message = (
+            f"[info] removed {removed_duplicates} near-duplicate states"
+        )
+        if removed_similar:
+            message += f" ({removed_similar} with small feature differences)"
+        if conflicting_labels:
+            message += f"; {conflicting_labels} conflicting labels skipped"
+        print(message)
+
+    return filtered_X, filtered_y
+
 
 
 #testification area
