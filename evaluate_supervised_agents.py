@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import random
 from pathlib import Path
 from typing import Dict, List, Sequence
@@ -12,6 +13,7 @@ import numpy as np
 
 from env import AliensEnv
 from supervised import FEATURE_EXTRACTORS, load_model_bundle
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -52,6 +54,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         type=str,
         default="analysis/scores.json",
         help="Where to store the raw evaluation scores (JSON).",
+    )
+    parser.add_argument(
+        "--jobs",
+        type=int,
+        default=0,
+        help="Parallel workers for evaluating bundles (0 auto-detects cores).",
     )
     return parser.parse_args(argv)
 
@@ -141,6 +149,19 @@ def evaluate_bundle(bundle_path: Path, *, episodes: int, max_steps: int, seed: i
     return results
 
 
+def _resolve_jobs(requested: int, tasks: int) -> int:
+    if tasks <= 0:
+        return 0
+    if requested > 0:
+        return max(1, min(requested, tasks))
+    detected = os.cpu_count() or 1
+    return max(1, min(detected, tasks))
+
+
+def _evaluate_worker(path: str, episodes: int, max_steps: int, seed: int) -> List[Dict]:
+    return evaluate_bundle(Path(path), episodes=episodes, max_steps=max_steps, seed=seed)
+
+
 def main(argv: Sequence[str] | None = None) -> None:
     args = parse_args(argv)
 
@@ -156,16 +177,36 @@ def main(argv: Sequence[str] | None = None) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     all_results: List[Dict] = []
-    for model_path in model_paths:
-        print(f"[eval] Evaluating {model_path}")
-        all_results.extend(
-            evaluate_bundle(
-                model_path,
-                episodes=args.episodes,
-                max_steps=args.max_steps,
-                seed=args.seed,
+    jobs = _resolve_jobs(args.jobs, len(model_paths))
+
+    if jobs <= 1 or len(model_paths) <= 1:
+        for model_path in model_paths:
+            print(f"[eval] Evaluating {model_path}")
+            all_results.extend(
+                evaluate_bundle(
+                    model_path,
+                    episodes=args.episodes,
+                    max_steps=args.max_steps,
+                    seed=args.seed,
+                )
             )
-        )
+    else:
+        print(f"[eval] Using {jobs} parallel workers")
+        with ProcessPoolExecutor(max_workers=jobs) as pool:
+            futures = {
+                pool.submit(
+                    _evaluate_worker,
+                    str(model_path),
+                    args.episodes,
+                    args.max_steps,
+                    args.seed,
+                ): model_path
+                for model_path in model_paths
+            }
+            for future in as_completed(futures):
+                model_path = futures[future]
+                print(f"[eval] Completed {model_path}")
+                all_results.extend(future.result())
 
     metadata = {
         "episodes_per_combination": args.episodes,

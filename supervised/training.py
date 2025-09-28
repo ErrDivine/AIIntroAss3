@@ -48,6 +48,8 @@ def train_and_save_model(
     method: str,
     feature_extractor: str,
     logs: Sequence[str] | None = None,
+    max_logs: int | None = None,
+    wins_only: bool = False,
     output_dir: str | Path = "models",
     filename_template: str | None = None,
     extra_metadata: dict | None = None,
@@ -55,7 +57,22 @@ def train_and_save_model(
     """Train `estimator` on data from `level` and persist the fitted bundle."""
 
     if logs is None:
-        logs = plugins.get_level_logs(level)
+        finder = plugins.get_level_logs_win if wins_only else plugins.get_level_logs
+        logs = finder(level)
+    else:
+        logs = list(logs)
+
+    logs = sorted(logs)
+    if max_logs is not None:
+        logs = logs[:max_logs]
+
+    if not logs:
+        raise RuntimeError(
+            "No log folders available for training. Verify your dataset or arguments."
+        )
+
+    descriptor = "wins" if wins_only else "all"
+    print(f"[data] using {len(logs)} log folders ({descriptor}) for level {level}.")
 
     records = load_game_records(logs)
     feature_fn = _resolve_feature_fn(feature_extractor)
