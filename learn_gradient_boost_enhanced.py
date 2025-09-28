@@ -23,6 +23,17 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         default=None,
         help="Optional list of log folder names to train on.",
     )
+    parser.add_argument(
+        "--max-logs",
+        type=int,
+        default=150,
+        help="Cap the number of log folders used (mirrors learn.py default of 150).",
+    )
+    parser.add_argument(
+        "--wins-only",
+        action="store_true",
+        help="When discovering logs automatically, only use winning trajectories.",
+    )
     parser.add_argument("--learning-rate", type=float, default=0.05, help="Gradient boosting learning rate.")
     parser.add_argument("--n-estimators", type=int, default=400, help="Number of boosting stages.")
     parser.add_argument("--max-depth", type=int, default=3, help="Maximum depth of individual estimators.")
@@ -52,6 +63,8 @@ def main(argv: Sequence[str] | None = None) -> None:
         method="gradient_boosting_enhanced",
         feature_extractor="extract_enhanced_features",
         logs=args.logs,
+        max_logs=args.max_logs,
+        wins_only=args.wins_only,
         output_dir=args.output_dir,
         filename_template="{method}_{feature}_lvl{level}_{timestamp}.pkl",
         extra_metadata={
