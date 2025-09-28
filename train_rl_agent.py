@@ -291,7 +291,9 @@ def train(config: TrainingConfig) -> None:
         else:
             vec = SubprocVecEnv(env_fns)
             print(f"[env] training with {config.num_envs} parallel workers")
-        vec.seed([config.seed + idx for idx in range(config.num_envs)])
+
+        vec.seed(config.seed)
+
         train_env = VecMonitor(vec)
         train_env.reset()
 

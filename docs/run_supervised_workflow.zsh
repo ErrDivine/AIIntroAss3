@@ -111,27 +111,37 @@ USAGE
 }
 
 parse_list_flag() {
-  typeset -n target=$1
+
+  local target_name=$1
   shift
-  target=()
+
   if [[ $# -eq 0 ]]; then
     echo "run_supervised_workflow.zsh: expected at least one value for list flag" >&2
     exit 64
   fi
   local token
+
+  local -a values=()
+
   for token in "$@"; do
     if [[ $token == --* ]]; then
       echo "run_supervised_workflow.zsh: list flag missing value before '$token'" >&2
       exit 64
     fi
-    target+=("$token")
+
+    values+=("$token")
   done
+  set -A "$target_name" "${values[@]}"
 }
 
 append_token() {
-  typeset -n target=$1
+  local target_name=$1
   local value=$2
-  target+=("$value")
+  local -a current=()
+  eval "current=(\"\${${target_name}[@]}\")"
+  current+=("$value")
+  set -A "$target_name" "${current[@]}"
+
 }
 
 while [[ $# -gt 0 ]]; do
@@ -369,7 +379,9 @@ PY
   fi
   [[ -z $result ]] && result=1
   CPU_COUNT_CACHE=$result
-  print -- -n "$result"
+
+  print -n -- "$result"
+
 }
 
 resolve_jobs() {
@@ -379,16 +391,20 @@ resolve_jobs() {
     local cpus
     cpus=$(get_cpu_count)
     if [[ -z $tasks || $tasks -le 0 ]]; then
-      print -- -n "$cpus"
+
+      print -n -- "$cpus"
+
       return
     fi
     if (( cpus > tasks )); then
       cpus=$tasks
     fi
     (( cpus < 1 )) && cpus=1
-    print -- -n "$cpus"
+
+    print -n -- "$cpus"
   else
-    print -- -n "$spec"
+    print -n -- "$spec"
+
   fi
 }
 
@@ -404,10 +420,12 @@ wait_for_slot() {
     CMDS=(${CMDS[@]:2})
     if (( ! DRY_RUN )) && [[ -n $pid ]]; then
       wait $pid
-      local status=$?
-      if (( status != 0 )); then
-        print -- "[error] command failed (exit $status): $cmd" >&2
-        exit $status
+
+      local exit_code=$?
+      if (( exit_code != 0 )); then
+        print -- "[error] command failed (exit $exit_code): $cmd" >&2
+        exit $exit_code
+
       fi
     fi
   done
@@ -438,11 +456,13 @@ wait_for_all() {
   local idx=1
   for pid in "${PIDS[@]}"; do
     wait $pid
-    local status=$?
+
+    local exit_code=$?
     local cmd=${CMDS[$idx]:-}
-    if (( status != 0 )); then
-      print -- "[error] command failed (exit $status): $cmd" >&2
-      exit $status
+    if (( exit_code != 0 )); then
+      print -- "[error] command failed (exit $exit_code): $cmd" >&2
+      exit $exit_code
+
     fi
     (( idx++ ))
   done
