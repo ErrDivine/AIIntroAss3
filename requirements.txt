@@ -10,4 +10,7 @@ stable-baselines3
 pandas
 matplotlib
 seaborn
+tqdm
+
+
 
