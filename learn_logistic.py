@@ -25,6 +25,17 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         default=None,
         help="Optional list of log folder names to train on. Overrides automatic discovery.",
     )
+    parser.add_argument(
+        "--max-logs",
+        type=int,
+        default=150,
+        help="Cap the number of log folders used (mirrors learn.py default of 150).",
+    )
+    parser.add_argument(
+        "--wins-only",
+        action="store_true",
+        help="When discovering logs automatically, only use winning trajectories.",
+    )
     parser.add_argument("--c", type=float, default=1.0, help="Inverse regularisation strength for LogisticRegression.")
     parser.add_argument("--max-iter", type=int, default=1000, help="Maximum iterations for LogisticRegression.")
     parser.add_argument("--random-state", type=int, default=42, help="Random seed for reproducibility.")
@@ -51,6 +62,7 @@ def main(argv: Sequence[str] | None = None) -> None:
                     random_state=args.random_state,
                     multi_class="auto",
                     solver="saga",
+                    n_jobs=-1,
                 ),
             ),
         ]
@@ -62,6 +74,8 @@ def main(argv: Sequence[str] | None = None) -> None:
         method="logistic_regression",
         feature_extractor="extract_binary_features",
         logs=args.logs,
+        max_logs=args.max_logs,
+        wins_only=args.wins_only,
         output_dir=args.output_dir,
         extra_metadata={"C": args.c, "max_iter": args.max_iter},
     )

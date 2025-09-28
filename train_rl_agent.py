@@ -72,7 +72,7 @@ try:
     from stable_baselines3 import DQN
     from stable_baselines3.common.callbacks import CallbackList, CheckpointCallback, EvalCallback
     from stable_baselines3.common.utils import set_random_seed
-    from stable_baselines3.common.vec_env import DummyVecEnv, VecMonitor
+    from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMonitor
 except ImportError as exc:  # pragma: no cover - helpful runtime message.
     raise ImportError(
         "stable-baselines3 is required. Install the optional dependencies with"
@@ -258,6 +258,7 @@ class TrainingConfig:
     save_path: str
     log_interval: int
     device: str
+    num_envs: int
 
 
 def make_env(level: int, render: bool, seed: int) -> Callable[[], gym.Env]:
@@ -281,18 +282,26 @@ def train(config: TrainingConfig) -> None:
     eval_env: Optional[VecMonitor] = None
     train_env: Optional[VecMonitor] = None
     try:
-        train_vec = DummyVecEnv([make_env(config.level, render=False, seed=config.seed)])
-        train_vec.seed(config.seed)
-        train_env = VecMonitor(train_vec)
+        env_fns = [
+            make_env(config.level, render=False, seed=config.seed + idx)
+            for idx in range(config.num_envs)
+        ]
+        if config.num_envs == 1:
+            vec = DummyVecEnv(env_fns)
+        else:
+            vec = SubprocVecEnv(env_fns)
+            print(f"[env] training with {config.num_envs} parallel workers")
+        vec.seed(config.seed)
+        train_env = VecMonitor(vec)
         train_env.reset()
 
         callbacks = []
 
         if config.eval_frequency > 0:
             eval_vec = DummyVecEnv(
-                [make_env(config.level, render=False, seed=config.seed + 1)]
+                [make_env(config.level, render=False, seed=config.seed + config.num_envs)]
             )
-            eval_vec.seed(config.seed + 1)
+            eval_vec.seed(config.seed + config.num_envs)
             eval_env = VecMonitor(eval_vec)
             eval_env.reset()
             best_model_dir = os.path.join(os.path.dirname(config.save_path), "best")
@@ -382,12 +391,39 @@ def parse_args(args: Optional[Sequence[str]] = None) -> argparse.Namespace:
             "Computation device passed to Stable-Baselines3 (e.g. 'auto', 'cpu', 'cuda', 'cuda:0')."
         ),
     )
+    parser.add_argument(
+        "--num-envs",
+        type=str,
+        default="auto",
+        help=(
+            "Parallel environments for training. Use 'auto' to match CPU cores or set an explicit integer."
+        ),
+    )
     return parser.parse_args(args)
+
+
+def resolve_num_envs(value: str | int) -> int:
+    if isinstance(value, str):
+        token = value.strip().lower()
+        if token == "auto":
+            detected = os.cpu_count() or 1
+            return max(1, detected)
+        try:
+            num_envs = int(token)
+        except ValueError as exc:  # pragma: no cover - defensive guard
+            raise ValueError("--num-envs must be an integer or 'auto'") from exc
+    else:
+        num_envs = int(value)
+    if num_envs < 1:
+        raise ValueError("--num-envs must be at least 1")
+    return num_envs
 
 
 def main() -> None:
     args = parse_args()
     save_path = args.save_path.format(level=args.level)
+    num_envs = resolve_num_envs(args.num_envs)
+
     config = TrainingConfig(
         level=args.level,
         total_timesteps=args.total_timesteps,
@@ -410,6 +446,7 @@ def main() -> None:
         save_path=save_path,
         log_interval=args.log_interval,
         device=args.device,
+        num_envs=num_envs,
     )
     train(config)
 

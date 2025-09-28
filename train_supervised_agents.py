@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import argparse
-from typing import Callable, Dict, Iterable, List, Sequence
+import os
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from typing import Callable, Dict, Iterable, List, Sequence, Tuple
 
 import learn_gradient_boost
 import learn_gradient_boost_enhanced
@@ -60,6 +62,23 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         default="models",
         help="Directory where trained bundles will be stored.",
     )
+    parser.add_argument(
+        "--max-logs",
+        type=int,
+        default=150,
+        help="Cap the number of log folders per level (mirrors learn.py default of 150).",
+    )
+    parser.add_argument(
+        "--wins-only",
+        action="store_true",
+        help="When discovering logs automatically, only use winning trajectories.",
+    )
+    parser.add_argument(
+        "--jobs",
+        type=int,
+        default=0,
+        help="Parallel workers for training (0 auto-detects CPU cores).",
+    )
     parser.add_argument("--logistic-c", type=float, default=1.0, dest="logistic_c")
     parser.add_argument("--logistic-max-iter", type=int, default=1000, dest="logistic_max_iter")
     parser.add_argument("--logistic-random-state", type=int, default=42, dest="logistic_random_state")
@@ -81,6 +100,10 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 
 def build_arguments(method: str, level: str, args: argparse.Namespace) -> List[str]:
     base = ["--level", level, "--output-dir", args.output_dir]
+    if args.max_logs is not None:
+        base.extend(["--max-logs", str(args.max_logs)])
+    if args.wins_only:
+        base.append("--wins-only")
     if method == "logistic":
         base.extend(
             [
@@ -123,19 +146,53 @@ def build_arguments(method: str, level: str, args: argparse.Namespace) -> List[s
     return base
 
 
+def _invoke_trainer(method: str, cmd_args: Sequence[str]) -> None:
+    trainer = TRAINERS[method]
+    trainer(cmd_args)
+
+
+def _resolve_jobs(requested: int, tasks: int) -> int:
+    if tasks <= 0:
+        return 0
+    if requested > 0:
+        return max(1, min(requested, tasks))
+    detected = os.cpu_count() or 1
+    return max(1, min(detected, tasks))
+
+
 def main(argv: Sequence[str] | None = None) -> None:
     args = parse_args(argv)
     levels = parse_levels(args.levels)
 
+    tasks: List[Tuple[str, str, List[str]]] = []
     for method in args.methods:
-        trainer = TRAINERS[method]
         for level in levels:
             cmd_args = build_arguments(method, level, args)
-            printable = " ".join(cmd_args)
-            print(f"[train] {method} level={level} :: {printable}")
-            if args.dry_run:
-                continue
-            trainer(cmd_args)
+            tasks.append((method, level, cmd_args))
+
+    for method, level, cmd_args in tasks:
+        printable = " ".join(cmd_args)
+        print(f"[train] {method} level={level} :: {printable}")
+
+    if args.dry_run:
+        return
+
+    jobs = _resolve_jobs(args.jobs, len(tasks))
+
+    if jobs <= 1 or len(tasks) <= 1:
+        for method, _, cmd_args in tasks:
+            _invoke_trainer(method, cmd_args)
+        return
+
+    with ProcessPoolExecutor(max_workers=jobs) as pool:
+        futures = {
+            pool.submit(_invoke_trainer, method, cmd_args): (method, level)
+            for method, level, cmd_args in tasks
+        }
+        for future in as_completed(futures):
+            method, level = futures[future]
+            future.result()
+            print(f"[done] {method} level={level}")
 
 
 if __name__ == "__main__":

@@ -39,7 +39,12 @@ from __future__ import annotations
 
 from typing import Optional, Sequence
 
-from train_rl_agent import TrainingConfig, parse_args as gpu_parse_args, train
+from train_rl_agent import (
+    TrainingConfig,
+    parse_args as gpu_parse_args,
+    resolve_num_envs,
+    train,
+)
 
 
 def parse_args(args: Optional[Sequence[str]] = None):
@@ -76,6 +81,7 @@ def main() -> None:
         save_path=save_path,
         log_interval=args.log_interval,
         device=args.device,
+        num_envs=resolve_num_envs(args.num_envs),
     )
     train(config)
 
