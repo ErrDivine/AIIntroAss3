@@ -16,7 +16,7 @@ This document explains how to prepare data, train supervised learning agents, ev
    Use `--targets` if you need to tailor which directories are purged.
 4. (Optional) Recreate helper directories if the cleanup removed them:
    ```bash
-   mkdir -p logs models analysis/figures figs
+   mkdir -p logs models analysis/baseline_figures analysis/enhanced_figures figs
    ```
 
 ## 2. Collecting Training Trajectories
@@ -46,7 +46,7 @@ pt for your run:
 
 | Script | Learning Method | Feature Type |
 | ------ | ---------------- | ------------ |
-| `learn.py` | Random forest (legacy baseline) | Binary grid features |
+| `learn_random_forest.py` | Random forest | Binary grid features |
 | `learn_logistic.py` | Logistic regression | Binary grid features |
 | `learn_gradient_boost.py` | Gradient boosting | Binary grid features |
 | `learn_gradient_boost_enhanced.py` | Gradient boosting | Enhanced spatial statistics |
@@ -54,50 +54,64 @@ pt for your run:
 Each script relies on the shared `supervised/` package to locate logs, build
 features, train models, and persist rich metadata. Feature extraction now uses
 Joblib to parallelise across CPU cores, so even the aggregated `all` dataset
-loads quickly. To satisfy the assignment requirement of training **three
-methods across six level specifications (0–4 plus `all`)**, use the automation
-helper:
+loads quickly. The training workload is intentionally split into **two
+experiments** so you can compare the baseline binary representation with the new
+engineered features without cross-contamination:
+
+- **Phase 1 – Baseline (binary features):** trains `random_forest`, `logistic`,
+  and `gradient_boost` models for levels `0`–`4` plus `all`.
+- **Phase 2 – Enhanced features:** reruns gradient boosting with the
+  engineered feature extractor across the same level specification.
+
+Models are stored under `models/baseline/` or `models/enhanced/` depending on
+the phase. Run the automation harness twice—once per experiment—to satisfy the
+assignment's requirement of three supervised methods and to keep the feature
+comparison isolated:
 
 ```bash
-python train_supervised_agents.py
+# Phase 1: binary-feature baselines (random forest, logistic, gradient boost)
+python train_supervised_agents.py --experiments baseline --levels 0 1 2 3 4 all --jobs auto
+
+# Phase 2: enhanced feature sweep (gradient boosting + engineered features)
+python train_supervised_agents.py --experiments enhanced --levels 0 1 2 3 4 all --jobs auto
 ```
 
+`--methods` still accepts fine-grained selections—for example,
+`--methods random_forest logistic` with `--experiments baseline` retrains only
+the requested pipelines. Use `--dry-run` to preview the generated commands
+without executing them. Individual scripts remain callable for bespoke runs:
 
 ```bash
-python train_supervised_agents.py \
-    --levels 0 1 2 3 4 all \
-    --methods logistic gradient_boost_enhanced \
-    --logistic-c 0.5 --logistic-max-iter 300 \
-    --enh-learning-rate 0.03 --enh-n-estimators 500 \
-    --wins-only
+python learn_random_forest.py --level all --n-estimators 400 --max-depth 18
+python learn_logistic.py --level 0 --c 0.25 --wins-only
+python learn_gradient_boost.py --level 2 --n-estimators 600 --learning-rate 0.03
+python learn_gradient_boost_enhanced.py --level 3 --n-estimators 500 --learning-rate 0.04
 ```
 
-Use `--dry-run` to preview the generated commands without executing them. You can still launch individual scripts manually when experimenting with alternative hyperparameters.
-
-Common one-off training commands if you prefer direct control:
-
-```bash
-python learn_logistic.py --level 0
-python learn_gradient_boost.py --level all
-python learn_gradient_boost_enhanced.py --level 2
-```
-
-`learn_logistic.py` now drives the multi-thread capable `saga` solver with
-`n_jobs=-1`, so it automatically utilises every available core. The legacy
-`learn.py` random forest baseline already benefits from `n_estimators=300` and
-`n_jobs=-1` for parallel tree building.
-
+`learn_logistic.py` still drives the multi-thread capable `saga` solver with
+`n_jobs=-1`, while the tree-based pipelines expose explicit seeds and
+parallelism controls to keep comparisons reproducible.
 
 ## 4. Evaluating Trained Agents
 
-After producing the 18 supervised bundles, run the evaluation harness once to execute the required 900 tests (30 episodes for each level/method combination):
+Because the two experiments should be analysed separately, evaluate the saved models per phase to generate distinct score logs (still 900 games per phase by default):
 
 ```bash
+# Phase 1 baseline evaluation
 python evaluate_supervised_agents.py \
+    --model-dir models/baseline \
     --episodes 30 \
     --max-steps 2000 \
     --jobs auto \
-    --output analysis/scores.json
+    --output analysis/baseline_scores.json
+
+# Phase 2 enhanced-feature evaluation
+python evaluate_supervised_agents.py \
+    --model-dir models/enhanced \
+    --episodes 30 \
+    --max-steps 2000 \
+    --jobs auto \
+    --output analysis/enhanced_scores.json
 ```
 
 - Models trained on a specific level are evaluated on that level only.
@@ -106,14 +120,15 @@ python evaluate_supervised_agents.py \
 - Use `--jobs` to bound the number of parallel evaluation workers if the
   default `auto` setting is too aggressive for your machine.
 
-The output file contains every episode result along with metadata that captures the training method, feature extractor, train level, evaluation level, and whether the agent won.
+Each JSON file contains the per-episode scores and metadata for the corresponding phase, making downstream comparisons straightforward.
 
 ## 5. Analysing Evaluation Results
 
-Use `analyze_scores.py` to build publication-ready tables and figures:
+Run the analyser once per JSON file to keep the reporting artefacts grouped by experiment:
 
 ```bash
-python analyze_scores.py --scores analysis/scores.json --output-dir analysis/figures
+python analyze_scores.py --scores analysis/baseline_scores.json --output-dir analysis/baseline_figures
+python analyze_scores.py --scores analysis/enhanced_scores.json --output-dir analysis/enhanced_figures
 ```
 
 The analyser creates:
@@ -124,16 +139,11 @@ The analyser creates:
 - `mean_scores_by_feature.csv`: contrasts between baseline and enhanced feature sets.
 - Visualisations saved as PNG files showing score distributions, average scores, win rates, and average steps.
 
-Inspect both the CSV and Markdown exports when preparing your report—they provide the quantitative evidence required for the performance comparison section.
+Inspect both the CSV and Markdown exports for each phase—they provide the quantitative evidence required for the performance comparison section. You can merge the JSON files later if a combined analysis becomes necessary, but keep the primary artefacts separate to follow the assignment brief.
 
 ## 6. Enhanced Feature Experiments
 
-To evaluate the improved feature extractor:
-
-1. Use `train_supervised_agents.py --methods gradient_boost_enhanced --levels 0 1 2 3 4 all` (or call `learn_gradient_boost_enhanced.py` manually) to retrain models with the enhanced features.
-2. Re-run `evaluate_supervised_agents.py` to append fresh results or write them to a separate JSON file (e.g., `analysis/enhanced_scores.json`).
-3. Invoke `analyze_scores.py` on each JSON file to generate dedicated tables/figures. You can also merge evaluation files beforehand to compare baseline and enhanced features within a single analysis run.
-4. Use the win-rate and score tables to argue which feature extractor performs better at each level.
+The enhanced-feature phase described above already encapsulates the improved feature extractor workflow. Re-run it whenever you tweak the engineered features or adjust gradient boosting hyperparameters. Keep the outputs under `analysis/enhanced_*` to maintain a clear comparison with the baseline figures generated in `analysis/baseline_*`.
 
 ## 7. Maintaining Experiments
 
@@ -162,11 +172,14 @@ To evaluate the improved feature extractor:
 1. `python reset_experiment_data.py --targets logs models figs analysis --yes`
 2. Train RL agents and gather wins for levels `0`–`4` using `train_rl_agent.py --num-envs auto` and `rl_play.py` (optionally with
    `--rl-play-jobs` for the harness).
-3. `python train_supervised_agents.py --levels 0 1 2 3 4 all --jobs auto`
-4. `python evaluate_supervised_agents.py --episodes 30 --jobs auto --output analysis/scores.json`
-5. `python analyze_scores.py --scores analysis/scores.json --output-dir analysis/figures`
+3. `python train_supervised_agents.py --experiments baseline --levels 0 1 2 3 4 all --jobs auto`
+4. `python train_supervised_agents.py --experiments enhanced --levels 0 1 2 3 4 all --jobs auto`
+5. `python evaluate_supervised_agents.py --model-dir models/baseline --episodes 30 --jobs auto --output analysis/baseline_scores.json`
+6. `python evaluate_supervised_agents.py --model-dir models/enhanced --episodes 30 --jobs auto --output analysis/enhanced_scores.json`
+7. `python analyze_scores.py --scores analysis/baseline_scores.json --output-dir analysis/baseline_figures`
+8. `python analyze_scores.py --scores analysis/enhanced_scores.json --output-dir analysis/enhanced_figures`
 
-Following this pipeline produces reproducible supervised learning agents, comprehensive evaluation logs (900 test games), and ready-to-use tables and figures for the final report.
+Following this pipeline produces reproducible supervised learning agents for both experiments, comprehensive evaluation logs (900 test games per phase), and ready-to-use tables and figures for the final report.
 
 > Need everything in one command? Run `./docs/run_supervised_workflow.zsh`
 > (or the `.sh` variant) to execute steps 1–5 automatically with the defaults
@@ -197,16 +210,20 @@ described in this guide while automatically parallelising CPU-heavy stages:
 3. **Trajectory capture** – records 80 deterministic wins per level via
    `rl_play.py`, producing the datasets consumed by the supervised trainers.
    Collection processes can run concurrently through `--rl-play-jobs`.
-4. **Supervised training** – launches `train_supervised_agents.py --jobs auto` for the
-   logistic regression and both gradient boosting variants across levels
-   `0`–`4` plus the aggregated `all` split (18 jobs by default). The script
-   forwards flags such as `--max-logs` and `--wins-only` so you can mirror the
+4. **Supervised training** – launches `train_supervised_agents.py --jobs auto`
+   twice: once for the baseline phase (`random_forest`, `logistic`,
+   `gradient_boost`) and once for the enhanced-feature sweep
+   (`gradient_boost_enhanced`). Bundles are stored under
+   `models/baseline/` and `models/enhanced/` respectively. The script forwards
+   flags such as `--max-logs` and `--wins-only` so you can mirror the
    data-selection rules introduced in the updated `learn.py`/`plugins.py`.
-5. **Evaluation** – executes `evaluate_supervised_agents.py --jobs auto` to generate the
-   900 scored episodes stored in `analysis/scores.json` (configurable through
-   `--episodes`, `--max-steps`, `--scores-out`, and `--eval-seed`).
-6. **Analysis** – runs `analyze_scores.py` to populate `analysis/figures/` with
-   tables and PNG visualisations.
+5. **Evaluation** – executes `evaluate_supervised_agents.py --jobs auto` twice
+   (once per model directory) to generate two sets of 900 scored episodes:
+   `analysis/baseline_scores.json` and `analysis/enhanced_scores.json`. Adjust
+   `--episodes`, `--max-steps`, or `--eval-seed` as needed.
+6. **Analysis** – runs `analyze_scores.py` for each JSON file to populate
+   `analysis/baseline_figures/` and `analysis/enhanced_figures/` with tables and
+   PNG visualisations.
 
 Useful toggles include `--dry-run` (preview commands without executing them)
 plus `--skip-rl-train`, `--skip-rl-play`, `--skip-supervised`, `--skip-eval`,
@@ -225,4 +242,4 @@ automatically removes duplicate or near-identical states when the updated
 branch, keeping the feature matrices compact and consistent with the latest
 tooling.
 
-By default this issues 18 training jobs (3 methods × 6 level specs) and stores timestamped `.pkl` bundles inside `models/`. Customise the run if needed:
+By default the harness now launches 18 baseline jobs (3 methods × 6 levels) plus 6 enhanced-feature jobs, storing bundles under `models/baseline/` and `models/enhanced/`. Customise the run if needed:
