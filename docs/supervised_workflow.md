@@ -62,58 +62,6 @@ helper:
 python train_supervised_agents.py
 ```
 
-If you prefer a single command that reproduces the entire workflow—from
-resetting artefacts to exporting analysis plots—the repository ships with two
-automation harnesses located beside this document:
-
-```bash
-# macOS (or other systems with zsh available)
-./docs/run_supervised_workflow.zsh
-
-# Bash-friendly variant for Linux environments
-./docs/run_supervised_workflow.sh
-```
-
-Running either script performs the following sequence with the defaults
-described in this guide while automatically parallelising CPU-heavy stages:
-
-1. **Clean start** – calls `reset_experiment_data.py --yes --targets logs models figs analysis` unless `--skip-reset` is supplied.
-2. **RL training** – trains DQN specialists for levels `0`–`4` with
-   `train_rl_agent.py --total-timesteps 2500000 --num-envs auto` and a configurable seed.
-   The harness fans these jobs out across available CPU cores (override with
-   `--rl-train-jobs`).
-3. **Trajectory capture** – records 80 deterministic wins per level via
-   `rl_play.py`, producing the datasets consumed by the supervised trainers.
-   Collection processes can run concurrently through `--rl-play-jobs`.
-4. **Supervised training** – launches `train_supervised_agents.py --jobs auto` for the
-   logistic regression and both gradient boosting variants across levels
-   `0`–`4` plus the aggregated `all` split (18 jobs by default). The script
-   forwards flags such as `--max-logs` and `--wins-only` so you can mirror the
-   data-selection rules introduced in the updated `learn.py`/`plugins.py`.
-5. **Evaluation** – executes `evaluate_supervised_agents.py --jobs auto` to generate the
-   900 scored episodes stored in `analysis/scores.json` (configurable through
-   `--episodes`, `--max-steps`, `--scores-out`, and `--eval-seed`).
-6. **Analysis** – runs `analyze_scores.py` to populate `analysis/figures/` with
-   tables and PNG visualisations.
-
-Useful toggles include `--dry-run` (preview commands without executing them)
-plus `--skip-rl-train`, `--skip-rl-play`, `--skip-supervised`, `--skip-eval`,
-and `--skip-analysis` for partial reruns. Repeatable options such as
-`--rl-train-extra`, `--supervised-extra`, or `--eval-extra` let you append
-additional tokens to the underlying Python invocations, enabling advanced
-hyper-parameter tweaks without editing the harness. Concurrency knobs like
-`--rl-train-jobs`, `--rl-play-jobs`, `--supervised-jobs`, and `--eval-jobs`
-override the auto-detected worker counts when you need to bound resource usage.
-
-Both helpers respect the refreshed log-handling defaults by capping automatic
-discovery at 150 folders per level (override with `--max-logs` or `--max-logs
-none`) and by supporting `--wins-only` filtering. The dataset loader
-automatically removes duplicate or near-identical states when the updated
-`plugins.remove_duplicate_states` helper is available on the refreshed `main`
-branch, keeping the feature matrices compact and consistent with the latest
-tooling.
-
-By default this issues 18 training jobs (3 methods × 6 level specs) and stores timestamped `.pkl` bundles inside `models/`. Customise the run if needed:
 
 ```bash
 python train_supervised_agents.py \
@@ -223,3 +171,58 @@ Following this pipeline produces reproducible supervised learning agents, compre
 > Need everything in one command? Run `./docs/run_supervised_workflow.zsh`
 > (or the `.sh` variant) to execute steps 1–5 automatically with the defaults
 > described above.
+ 
+
+## A different script(beta)
+If you prefer a single command that reproduces the entire workflow—from
+resetting artefacts to exporting analysis plots—the repository ships with two
+automation harnesses located beside this document:
+
+```bash
+# macOS (or other systems with zsh available)
+./docs/run_supervised_workflow.zsh
+
+# Bash-friendly variant for Linux environments
+./docs/run_supervised_workflow.sh
+```
+
+Running either script performs the following sequence with the defaults
+described in this guide while automatically parallelising CPU-heavy stages:
+
+1. **Clean start** – calls `reset_experiment_data.py --yes --targets logs models figs analysis` unless `--skip-reset` is supplied.
+2. **RL training** – trains DQN specialists for levels `0`–`4` with
+   `train_rl_agent.py --total-timesteps 2500000 --num-envs auto` and a configurable seed.
+   The harness fans these jobs out across available CPU cores (override with
+   `--rl-train-jobs`).
+3. **Trajectory capture** – records 80 deterministic wins per level via
+   `rl_play.py`, producing the datasets consumed by the supervised trainers.
+   Collection processes can run concurrently through `--rl-play-jobs`.
+4. **Supervised training** – launches `train_supervised_agents.py --jobs auto` for the
+   logistic regression and both gradient boosting variants across levels
+   `0`–`4` plus the aggregated `all` split (18 jobs by default). The script
+   forwards flags such as `--max-logs` and `--wins-only` so you can mirror the
+   data-selection rules introduced in the updated `learn.py`/`plugins.py`.
+5. **Evaluation** – executes `evaluate_supervised_agents.py --jobs auto` to generate the
+   900 scored episodes stored in `analysis/scores.json` (configurable through
+   `--episodes`, `--max-steps`, `--scores-out`, and `--eval-seed`).
+6. **Analysis** – runs `analyze_scores.py` to populate `analysis/figures/` with
+   tables and PNG visualisations.
+
+Useful toggles include `--dry-run` (preview commands without executing them)
+plus `--skip-rl-train`, `--skip-rl-play`, `--skip-supervised`, `--skip-eval`,
+and `--skip-analysis` for partial reruns. Repeatable options such as
+`--rl-train-extra`, `--supervised-extra`, or `--eval-extra` let you append
+additional tokens to the underlying Python invocations, enabling advanced
+hyper-parameter tweaks without editing the harness. Concurrency knobs like
+`--rl-train-jobs`, `--rl-play-jobs`, `--supervised-jobs`, and `--eval-jobs`
+override the auto-detected worker counts when you need to bound resource usage.
+
+Both helpers respect the refreshed log-handling defaults by capping automatic
+discovery at 150 folders per level (override with `--max-logs` or `--max-logs
+none`) and by supporting `--wins-only` filtering. The dataset loader
+automatically removes duplicate or near-identical states when the updated
+`plugins.remove_duplicate_states` helper is available on the refreshed `main`
+branch, keeping the feature matrices compact and consistent with the latest
+tooling.
+
+By default this issues 18 training jobs (3 methods × 6 level specs) and stores timestamped `.pkl` bundles inside `models/`. Customise the run if needed:
