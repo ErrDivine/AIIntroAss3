@@ -1,0 +1,12 @@
+| method                     | feature_extractor         | train_level   |   eval_level |   score_mean |   score_median |   score_std |   games_played |   win_rate |   avg_steps |   steps_std |
+|:---------------------------|:--------------------------|:--------------|-------------:|-------------:|---------------:|------------:|---------------:|-----------:|------------:|------------:|
+| gradient_boosting_enhanced | extract_enhanced_features | 0             |            0 |      43.6333 |           50   |    15.692   |             30 |  0         |     819.3   |     768.039 |
+| gradient_boosting_enhanced | extract_enhanced_features | 1             |            1 |      40.3667 |           42.5 |    13.0106  |             30 |  0         |     942.167 |     773.709 |
+| gradient_boosting_enhanced | extract_enhanced_features | 2             |            2 |      51.4    |           54   |     8.32777 |             30 |  0.433333  |    1377.17  |     695.138 |
+| gradient_boosting_enhanced | extract_enhanced_features | 3             |            3 |      36      |           36.5 |     8.45271 |             30 |  0         |    1447.57  |     821.266 |
+| gradient_boosting_enhanced | extract_enhanced_features | 4             |            4 |      40.8333 |           45.5 |    15.4721  |             30 |  0.0333333 |    1197.17  |    1018.02  |
+| gradient_boosting_enhanced | extract_enhanced_features | all           |            0 |      38.4    |           40.5 |    14.2408  |             30 |  0.0333333 |    1012.93  |     846.53  |
+| gradient_boosting_enhanced | extract_enhanced_features | all           |            1 |      37.8667 |           37.5 |    12.3253  |             30 |  0         |     710.3   |     717.859 |
+| gradient_boosting_enhanced | extract_enhanced_features | all           |            2 |      33.1667 |           32   |    13.9162  |             30 |  0.1       |     769.9   |     757.053 |
+| gradient_boosting_enhanced | extract_enhanced_features | all           |            3 |      22.0667 |           25   |    14.4626  |             30 |  0.0333333 |    1033.3   |     960.106 |
+| gradient_boosting_enhanced | extract_enhanced_features | all           |            4 |      26.2333 |           25   |    11.2577  |             30 |  0         |     659.567 |     679.668 |
